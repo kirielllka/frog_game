@@ -10,5 +10,6 @@ class Frog(Base):
     agility = Column(Integer, default=1)
     endurance = Column(Integer, default=1)
     atack = Column(Integer, default=1)
-
+    update_point = Column(Integer, default=0)
+    max_lvl = Column(Integer, default=1)
 
