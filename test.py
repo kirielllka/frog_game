@@ -1,5 +1,4 @@
-cur_atr = 10
+from game_main.GameDao.ItemsDAO.WeaponsDAO import WeaponsDAO, Weapon_categoryDAO
 
-strg = int(input(f'Введите количество камней повышения(у вас есть {cur_atr}) которые вы хотите потратить на силу: '))
-cur_atr-strg
-agl = int(input(f'Введите количество камней повышения(у вас есть {cur_atr-strg}) которые вы хотите потратить на ловкость: '))
+
+

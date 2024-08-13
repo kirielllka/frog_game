@@ -1,6 +1,8 @@
+from math import trunc
+
 from database import session_maker as session
 
-from model import Frog
+from models.Frog_models import Frog
 
 from .BaseDAO import BaseDAO
 
@@ -9,7 +11,7 @@ from .algos import Algorithms
 import random
 
 from sqlalchemy import select, insert, update
-from sqlalchemy.exc import NoResultFound
+
 
 class FrogDAO(BaseDAO): #модель со всеми основными функциями
     model = Frog
@@ -18,9 +20,13 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
     def find_frog_by_name(cls, frog_name: str): #поиск жабы по имени
 
             query = select(Frog).where(Frog.name == frog_name) #ищем жабу по имени
-            result = session.execute(query).scalar_one_or_none() #сохраняем найденный результат
-            return result #возвращаем результат
+            result = session().execute(query)#сохраняем найденный результат
+            try:
 
+                return result.fetchall()[0] #возвращаем результат
+
+            except IndexError:
+                return None
     @classmethod
     def create_frog(cls): #
         frog_name = input('Введите имя вашей жабы:')#
@@ -31,11 +37,12 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
         atrs = Algorithms.point_update(10)#
         query = insert(Frog).values(name=frog_name, strengh=atrs['strg'],
                                     agility=atrs['agl'], endurance=atrs['end'])#
-        session.execute(query)#
-        session.commit()#
+        session().execute(query)#
+        session().commit()#
 
     @classmethod
     def create_frog_dict(cls, frog: Frog):#
+        frog = frog[0]
         return {
             'id': frog.id,
             'name': frog.name,
@@ -43,10 +50,10 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
             'strengh': frog.strengh,
             'agility': frog.agility,
             'endurance': frog.endurance,
-            'atack': frog.atack,
+            'atack': frog.attack,
             'health': frog.endurance * 5,
-            'damage': frog.atack + frog.strengh,
-            'dodge': (frog.agility * 5 // frog.lvl) / 100
+            'damage': frog.attack + frog.strengh,
+            'dodge': cls.calculate_dodge_chance(agility=frog.agility,player_level=frog.max_lvl)
         }#
 
     @classmethod
@@ -70,7 +77,7 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
         choise = input("Вы получили ключ нынешней комнаты, желаете пройти в следующую?\n"
                        "Учтите, что с каждой новой комнатой ваш уровень повышается, и вместе с этим ваши враги становятся сильнее.\n"
                        "Введите 'да' для перехода, 'нет' для отказа: ")#
-
+        cls.update_atrs(model_id=frog_id)
         if choise.lower() == 'да':#
             lvl = frog.lvl + 1#
             max_lvl = frog.max_lvl + 1#
@@ -78,11 +85,9 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
             lvl = frog.lvl#
             max_lvl = frog.max_lvl + 1#
 
-        with session(bind=cls.engine)() as sess:#
-            query = update(Frog).where(Frog.id == frog_id).values(lvl=lvl, max_lvl=max_lvl)#
-            sess.execute(query)#
-            sess.commit()#
-    pr
+        query = update(Frog).where(Frog.id == frog_id).values(lvl=lvl, max_lvl=max_lvl)#
+        session().execute(query)#
+        session().commit()#
     @classmethod#
     def fight(cls, enemy: dict = None, frog: dict = None):#
         print(f"🐸 {frog}")#
@@ -91,16 +96,21 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
             return None
         if enemy is None:
             if frog['lvl'] < 10:
-                probability = 1 // frog['lvl']
+                probability = 1 / frog['lvl']
             else:
                 probability = 3 // frog['lvl']
             super = random.choices([False, True], weights=[1 - probability, probability])[0]
+            print(probability)
             frog = cls.create_frog_dict(cls.find_frog_by_name(frog_name=frog['name']))
+            health = random.randint(round(frog['lvl'] * 5*0.8),round(frog['lvl']* 5 * 2))
             enemy = {
-                'health': frog['lvl'] * 5,
-                'damage': frog['lvl'] * 3,
-                'super': super
+                'health': health,
+                'damage': random.randint(round(frog['lvl'] * 3 * 0.8),round(frog['lvl'] *3 *1.2)),
+                'super': super,
+                'max_health':health
             }
+        damage = random.randint(trunc(frog['damage']*0.8),trunc(frog['damage']*1.2))
+        damage_enemy = random.randint(trunc(enemy['damage']*0.8),trunc(enemy['damage']*1.2))
 
         if enemy['health'] <= 0:
             if enemy['super']:
@@ -121,17 +131,47 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
             print(f"Ваше здоровье: {frog['health']} из {frog['lvl'] * 5} 💚")
             print(f"Ваш урон: {frog['damage']} ⚔️")
             print(f"Ваш шанс уклонения: {frog['dodge']} 💨\n")
-            print(f"Здоровье вашего противника: {enemy['health']} из {frog['lvl'] * 5} 💔")
+            print(f"Здоровье вашего противника: {enemy['health']} из {enemy['max_health']} 💔")
             print(f"Урон вашего противника: {enemy['damage']} 🗡️")
 
             choise = int(input("Что вы хотите сделать?\n1 - Атаковать ⚔️\n2 - Сбежать 🏃‍♂️\n"))
 
             match choise:
                 case 1:
-                    enemy['health'] -= frog['damage']
-                    frog['health'] -= enemy['damage']
+                    if not random.choices([True,False], weights=(frog['dodge'],100-frog['dodge'])):
+                        frog['health'] -= damage_enemy
+                        en_dmg_txt = f'Ваш враг нанес {damage_enemy}⚔️ урона'
+                    else:
+                        en_dmg_txt = 'Ваш противник промахнулся'
+                    enemy['health'] -= damage
+                    print(f'Вы нанесли {damage}⚔️ урона ')
+                    print(en_dmg_txt)
                     cls.fight(enemy=enemy, frog=frog)
                 case 2:
                     print("🏃‍♂️ Вы сбежали! 🏃‍♂️")
+
+    @classmethod
+    def calculate_dodge_chance(cls,agility, player_level):
+        base_chance = agility * 0.5
+        dodge_chance = min(base_chance, 60)  # Шанс уклонения не может быть больше 60%
+        dodge_chance -= player_level * 0.1  # Уменьшение шанса уклонения при повышении уровня игрока
+        return dodge_chance
+
+    @classmethod
+    def print_frog_stats(cls, frog_stats: dict):
+        print("🐸  Характеристики вашей жабы  🐸")
+        print("-" * 30)
+        print(f"Имя: {frog_stats['name']}")
+        print(f"Уровень: {frog_stats['lvl']}")
+        print(f"Сила: {frog_stats['strengh']} 💪")
+        print(f"Ловкость: {frog_stats['agility']} 💨")
+        print(f"Выносливость: {frog_stats['endurance']} 🐢")
+        print(f"Атака: {frog_stats['atack']} ⚔️")
+        print(f"Здоровье: {frog_stats['health']} ❤️")
+        print(f"Урон: {frog_stats['damage']} 💥")
+        print(f"Шанс уклонения: {frog_stats['dodge']:.2f}% 🤸‍♂️")
+        print("-" * 30)
+
+
 
 

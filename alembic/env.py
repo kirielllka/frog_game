@@ -1,9 +1,9 @@
 from logging.config import fileConfig
-from model import Frog
 from database import Base, DATABASE_URL
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-
+from models.Frog_models import Frog
+from models.Items_models.Weapon_models import Weapons,Weapon_Category
 from alembic import context
 
 # this is the Alembic Config object, which provides
