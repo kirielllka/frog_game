@@ -12,6 +12,7 @@ class Weapon_Category(Base):
 class Weapons(Base):
     __tablename__ = 'weapons'
     id = Column(Integer, primary_key=True)
+    name = Column(String)
     type = Column(Integer, ForeignKey('weapons_category.id'))
     attack = Column(Integer)
     critic = Column(Integer, default=0)

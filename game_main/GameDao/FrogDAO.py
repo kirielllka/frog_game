@@ -1,8 +1,8 @@
 from math import trunc
-
-from database import session_maker as session
+from database import session_maker
 
 from models.Frog_models import Frog
+from models.Items_models.Weapon_models import Weapons
 
 from .BaseDAO import BaseDAO
 
@@ -18,9 +18,9 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
 
     @classmethod
     def find_frog_by_name(cls, frog_name: str): #поиск жабы по имени
-
+            session = session_maker()
             query = select(Frog).where(Frog.name == frog_name) #ищем жабу по имени
-            result = session().execute(query)#сохраняем найденный результат
+            result = session.execute(query)#сохраняем найденный результат
             try:
 
                 return result.fetchall()[0] #возвращаем результат
@@ -28,7 +28,8 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
             except IndexError:
                 return None
     @classmethod
-    def create_frog(cls): #
+    def create_frog(cls):
+        session = session_maker()
         frog_name = input('Введите имя вашей жабы:')#
         if cls.find_frog_by_name(frog_name=frog_name):#
             print('Жаба с таким именем уже существует')#
@@ -37,12 +38,14 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
         atrs = Algorithms.point_update(10)#
         query = insert(Frog).values(name=frog_name, strengh=atrs['strg'],
                                     agility=atrs['agl'], endurance=atrs['end'])#
-        session().execute(query)#
-        session().commit()#
+        session.execute(query)#
+        session.commit()#
 
     @classmethod
     def create_frog_dict(cls, frog: Frog):#
         frog = frog[0]
+        weapon = session_maker().query(Weapons).filter(Weapons.frog_id == frog.id, Weapons.active == True)[0]
+        print(weapon.name)
         return {
             'id': frog.id,
             'name': frog.name,
@@ -50,21 +53,24 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
             'strengh': frog.strengh,
             'agility': frog.agility,
             'endurance': frog.endurance,
-            'atack': frog.attack,
+            'weapon': weapon.name,
+            'critical': int((frog.agility * 0.5) + (frog.strengh * 0.3) - (frog.max_lvl * 0.1) * 1.5 + weapon.critic),
+            'atack': frog.atack+weapon.attack,
             'health': frog.endurance * 5,
-            'damage': frog.attack + frog.strengh,
+            'damage': frog.atack + frog.strengh+weapon.attack,
             'dodge': cls.calculate_dodge_chance(agility=frog.agility,player_level=frog.max_lvl)
         }#
 
     @classmethod
     def update_atrs(cls, model_id):#
-            frog = cls.find_by_id(model=cls.model, model_id=model_id)#
+            session = session_maker()
+            frog = cls.find_by_id(model=cls.model, model_id=model_id)[0]#
+            print(frog)
             if frog:#
                 result = Algorithms.point_update(point=3)#
                 query = (update(Frog).values(strengh=result['strg'] + frog.strengh,
                                             agility=result['agl'] + frog.agility,
-                                            endurance=result['end'] + frog.endurance)
-                         .where(Frog.id == frog.id))#
+                                            endurance=result['end'] + frog.endurance).where(Frog.id == frog.id))#
                 session.execute(query)#
                 session.commit()#
             else:#
@@ -72,6 +78,7 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
 
     @classmethod
     def lvl_up(cls, frog_id):#
+        session = session_maker()
         frog = cls.find_by_id(model=cls.model, model_id=frog_id)[0]#
 
         choise = input("Вы получили ключ нынешней комнаты, желаете пройти в следующую?\n"
@@ -86,12 +93,11 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
             max_lvl = frog.max_lvl + 1#
 
         query = update(Frog).where(Frog.id == frog_id).values(lvl=lvl, max_lvl=max_lvl)#
-        session().execute(query)#
-        session().commit()#
+        session.execute(query)#
+        session.commit()#
     @classmethod#
     def fight(cls, enemy: dict = None, frog: dict = None):#
         print(f"🐸 {frog}")#
-
         if frog is None:#
             return None
         if enemy is None:
@@ -99,21 +105,27 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
                 probability = 1 / frog['lvl']
             else:
                 probability = 3 // frog['lvl']
-            super = random.choices([False, True], weights=[1 - probability, probability])[0]
-            print(probability)
+            super = random.choices([False, True], weights=[1 - probability, probability])
             frog = cls.create_frog_dict(cls.find_frog_by_name(frog_name=frog['name']))
-            health = random.randint(round(frog['lvl'] * 5*0.8),round(frog['lvl']* 5 * 2))
+            health = random.randint(round(frog['lvl'] * 7*0.8),round(frog['lvl']* 7 * 2))
             enemy = {
                 'health': health,
                 'damage': random.randint(round(frog['lvl'] * 3 * 0.8),round(frog['lvl'] *3 *1.2)),
                 'super': super,
                 'max_health':health
             }
-        damage = random.randint(trunc(frog['damage']*0.8),trunc(frog['damage']*1.2))
+
+        if random.choices([False,True], weights=(100-frog['critical'],frog['critical'])):
+            damage = random.randint(trunc(frog['damage']*0.8),trunc(frog['damage']*1.2))*1.5
+            dmg_text = f'Вы нанесли {damage}⚔️ критического урона 💥'
+        else:
+            damage = random.randint(trunc(frog['damage']*0.8),trunc(frog['damage']*1.2))*1.5
+            dmg_text = f'Вы нанесли {damage}⚔️ урона'
+
         damage_enemy = random.randint(trunc(enemy['damage']*0.8),trunc(enemy['damage']*1.2))
 
         if enemy['health'] <= 0:
-            if enemy['super']:
+            if enemy['super'][0]:
                 print("🏆 Вы победили противника! 🏆")
                 cls.lvl_up(frog_id=frog['id'])
                 frog.clear()
@@ -140,11 +152,13 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
                 case 1:
                     if not random.choices([True,False], weights=(frog['dodge'],100-frog['dodge'])):
                         frog['health'] -= damage_enemy
-                        en_dmg_txt = f'Ваш враг нанес {damage_enemy}⚔️ урона'
+                        en_dmg_txt = f'Ваш враг нанес {damage_enemy}⚔️ урона '
                     else:
                         en_dmg_txt = 'Ваш противник промахнулся'
+
                     enemy['health'] -= damage
-                    print(f'Вы нанесли {damage}⚔️ урона ')
+
+                    print(dmg_text)
                     print(en_dmg_txt)
                     cls.fight(enemy=enemy, frog=frog)
                 case 2:
@@ -166,9 +180,11 @@ class FrogDAO(BaseDAO): #модель со всеми основными фун�
         print(f"Сила: {frog_stats['strengh']} 💪")
         print(f"Ловкость: {frog_stats['agility']} 💨")
         print(f"Выносливость: {frog_stats['endurance']} 🐢")
+        print(f'Оружие: {frog_stats['weapon']}')
+        print(f'Критический шанс: {frog_stats['critical']} 💥')
         print(f"Атака: {frog_stats['atack']} ⚔️")
         print(f"Здоровье: {frog_stats['health']} ❤️")
-        print(f"Урон: {frog_stats['damage']} 💥")
+        print(f"Урон: {frog_stats['damage']} 💢")
         print(f"Шанс уклонения: {frog_stats['dodge']:.2f}% 🤸‍♂️")
         print("-" * 30)
 
