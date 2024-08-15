@@ -13,7 +13,7 @@ def main():
             FrogDAO.create_frog()
 
     while True:
-        choise = int(input('1 для исследования \n 2 просмотр жабы'))
+        choise = int(input('1 для исследования \n2 просмотр жабы'))
         match choise:
             case 1:
                 FrogDAO.fight(frog=FrogDAO.create_frog_dict(frog=frog))

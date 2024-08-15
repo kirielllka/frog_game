@@ -7,7 +7,7 @@ import random
 from sqlalchemy import select, insert, delete
 
 
-class BaseDAO():
+class BaseDAO:
     model:Base
     @classmethod
     def find_by_id(cls, model: Base, model_id: int):

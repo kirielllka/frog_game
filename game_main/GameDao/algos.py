@@ -1,6 +1,6 @@
 
 
-class Algorithms():
+class Algorithms:
     @classmethod
     def point_update(cls,point:int):
         while True:
