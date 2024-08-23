@@ -4,15 +4,15 @@ from database import Base
 
 import random
 
-from sqlalchemy import select, insert, delete
+from sqlalchemy import select, insert, delete, update
 
 
 class BaseDAO:
     model:Base
     @classmethod
-    def find_by_id(cls, model: Base, model_id: int):
+    def find_by_id(cls, model, model_id: int):
             session = session_maker()
-            query = select(model).filter_by(id=model_id)
+            query = select(model).where(model.id==model_id)
             result = session.execute(query)
             return result.fetchone()
 
@@ -30,3 +30,15 @@ class BaseDAO:
             query = delete(model).where(model.id == model_id)
             session.execute(query)
             session.commit()
+
+    @classmethod
+    def update(cls, model, model_id, data:dict):
+        with session_maker() as session:
+            stmt = update(model).values(**data).where(model.id==model_id)
+            session.execute(stmt)
+            session.commit()
+
+    @classmethod
+    def insert(cls, model, data:dict):
+        with session_maker() as session:
+            stmt = insert(model).values(**data)
